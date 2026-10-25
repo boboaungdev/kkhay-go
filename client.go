@@ -14,6 +14,12 @@ import (
 	"time"
 )
 
+// Version of the K Khay Go SDK.
+const Version = "1.0.4"
+
+// DefaultBaseURL is the production API endpoint.
+const DefaultBaseURL = "https://api.kkhay.com"
+
 // Client is the official Go HTTP client for K Khay Payment Gateway.
 type Client struct {
 	apiKey     string
@@ -54,7 +60,7 @@ func NewClient(apiKey string, opts ...ClientOption) (*Client, error) {
 
 	c := &Client{
 		apiKey:  key,
-		baseURL: "https://api.kkhay.com",
+		baseURL: DefaultBaseURL,
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
@@ -98,7 +104,7 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body interf
 
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("x-api-key", c.apiKey)
-	req.Header.Set("User-Agent", "kkhay-go/1.0.0")
+	req.Header.Set("User-Agent", "kkhay-go/"+Version)
 
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
@@ -151,18 +157,41 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body interf
 
 // CreateInvoice creates a new sovereign crypto payment invoice.
 func (c *Client) CreateInvoice(ctx context.Context, req CreateInvoiceRequest) (*CreateInvoiceResponse, error) {
-	if req.PriceAmount <= 0 {
-		return nil, errors.New("kkhay: PriceAmount must be greater than 0")
+	amount := req.Amount
+	if amount <= 0 {
+		amount = req.PriceAmount
 	}
-	if req.PayNetwork == "" {
-		return nil, errors.New("kkhay: PayNetwork is required (e.g. 'bsc', 'polygon')")
+	if amount <= 0 {
+		return nil, errors.New("kkhay: Amount (or PriceAmount) must be greater than 0")
 	}
-	if req.PayToken == "" {
-		return nil, errors.New("kkhay: PayToken is required (e.g. 'USDT', 'USDC')")
+
+	currency := strings.TrimSpace(req.Currency)
+	if currency == "" {
+		currency = strings.TrimSpace(req.PriceCurrency)
+	}
+	if currency == "" {
+		currency = "USD"
+	}
+
+	if strings.TrimSpace(req.PayNetwork) == "" {
+		return nil, errors.New("kkhay: PayNetwork is required (e.g. 'bsc', 'polygon', 'solana', 'bitcoin')")
+	}
+	if strings.TrimSpace(req.PayToken) == "" {
+		return nil, errors.New("kkhay: PayToken is required (e.g. 'USDT', 'USDC', 'BTC', 'ETH', 'SOL')")
+	}
+
+	req.Amount = amount
+	req.PriceAmount = amount
+	req.Currency = strings.ToUpper(currency)
+	req.PriceCurrency = strings.ToUpper(currency)
+	req.PayNetwork = strings.ToLower(strings.TrimSpace(req.PayNetwork))
+	req.PayToken = strings.ToUpper(strings.TrimSpace(req.PayToken))
+	if req.Type == "" {
+		req.Type = TypePayment
 	}
 
 	var res CreateInvoiceResponse
-	if err := c.doRequest(ctx, http.MethodPost, "/v1/merchant/invoices", req, &res); err != nil {
+	if err := c.doRequest(ctx, http.MethodPost, "/v1/gateway/invoices", req, &res); err != nil {
 		return nil, err
 	}
 	return &res, nil
@@ -176,14 +205,14 @@ func (c *Client) GetInvoice(ctx context.Context, invoiceID string) (*GetInvoiceR
 	}
 
 	var res GetInvoiceResponse
-	path := fmt.Sprintf("/v1/merchant/invoices/%s", url.PathEscape(id))
+	path := fmt.Sprintf("/v1/gateway/invoices/%s", url.PathEscape(id))
 	if err := c.doRequest(ctx, http.MethodGet, path, nil, &res); err != nil {
 		return nil, err
 	}
 	return &res, nil
 }
 
-// ListInvoices queries and paginates merchant invoices.
+// ListInvoices queries and paginates gateway invoices.
 func (c *Client) ListInvoices(ctx context.Context, query ListInvoicesQuery) (*ListInvoicesResponse, error) {
 	params := url.Values{}
 	if query.Page > 0 {
@@ -195,11 +224,14 @@ func (c *Client) ListInvoices(ctx context.Context, query ListInvoicesQuery) (*Li
 	if query.Status != "" {
 		params.Set("status", query.Status)
 	}
+	if query.Type != "" {
+		params.Set("type", query.Type)
+	}
 	if query.Search != "" {
 		params.Set("search", query.Search)
 	}
 
-	path := "/v1/merchant/invoices"
+	path := "/v1/gateway/invoices"
 	if len(params) > 0 {
 		path += "?" + params.Encode()
 	}
@@ -219,4 +251,3 @@ func (c *Client) CheckHealth(ctx context.Context) (map[string]interface{}, error
 	}
 	return res, nil
 }
-
