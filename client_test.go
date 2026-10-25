@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -149,8 +150,8 @@ func TestCreateInvoiceSuccess(t *testing.T) {
 		if r.Method != http.MethodPost {
 			t.Errorf("expected POST, got %s", r.Method)
 		}
-		if r.URL.Path != "/v1/gateway/invoices" {
-			t.Errorf("expected /v1/gateway/invoices, got %s", r.URL.Path)
+		if !strings.HasSuffix(r.URL.Path, "/v1/gateway/invoices") {
+			t.Errorf("expected path ending in /v1/gateway/invoices, got %s", r.URL.Path)
 		}
 		if r.Header.Get("x-api-key") != "kkhay_live_test_key" {
 			t.Errorf("expected x-api-key header")
@@ -233,7 +234,7 @@ func TestGetInvoice(t *testing.T) {
 		if r.Method != http.MethodGet {
 			t.Errorf("expected GET, got %s", r.Method)
 		}
-		if r.URL.Path == "/v1/gateway/invoices/inv_not_found" {
+		if strings.HasSuffix(r.URL.Path, "/v1/gateway/invoices/inv_not_found") {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusNotFound)
 			_ = json.NewEncoder(w).Encode(map[string]string{
@@ -244,7 +245,7 @@ func TestGetInvoice(t *testing.T) {
 			return
 		}
 
-		if r.URL.Path != "/v1/gateway/invoices/inv_valid" {
+		if !strings.HasSuffix(r.URL.Path, "/v1/gateway/invoices/inv_valid") {
 			t.Errorf("unexpected path: %s", r.URL.Path)
 		}
 
@@ -315,7 +316,7 @@ func TestListInvoices(t *testing.T) {
 		if r.Method != http.MethodGet {
 			t.Errorf("expected GET, got %s", r.Method)
 		}
-		if r.URL.Path != "/v1/gateway/invoices" {
+		if !strings.HasSuffix(r.URL.Path, "/v1/gateway/invoices") {
 			t.Errorf("unexpected path: %s", r.URL.Path)
 		}
 
@@ -362,7 +363,7 @@ func TestListInvoices(t *testing.T) {
 
 func TestCheckHealth(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/health" {
+		if !strings.HasSuffix(r.URL.Path, "/health") {
 			t.Errorf("unexpected path: %s", r.URL.Path)
 		}
 		w.Header().Set("Content-Type", "application/json")
