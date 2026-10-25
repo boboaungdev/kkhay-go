@@ -1,0 +1,46 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+
+      - name: Run tests
+        run: go test -v ./...
+
+      - name: Index on pkg.go.dev via Go Module Proxy
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/}"
+          echo "Indexing version ${VERSION} on proxy.golang.org..."
+          GOPROXY=https://proxy.golang.org go list -m "github.com/${{ github.repository }}@${VERSION}" || true
+          curl -s "https://proxy.golang.org/github.com/${{ github.repository }}/@v/${VERSION}.info" || true
+          curl -s -X POST "https://pkg.go.dev/fetch/github.com/${{ github.repository }}@${VERSION}" || true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }} — The Non-Custodial Multi-Chain Crypto Payment Gateway
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
